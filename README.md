@@ -1,7 +1,7 @@
 # HARUME Quick Search
 
 AviUtl2 用のエフェクト検索プラグインです。  
-After Effects の「FX Console」のように、素早くエフェクトを検索し追加できます。
+After Effects のFX Consoleのように、素早く検索し追加できます。
 
 ![Preview](preview.png)
 
@@ -35,12 +35,15 @@ After Effects の「FX Console」のように、素早くエフェクトを検�
 * AviUtl2 beta47
 
 ※開発者の環境でのみテストしています。すべての環境での動作を保証するものではありません。万が一動作しない場合はご連絡をお願いいたします。
+※ プラグインが読み込まれない場合、[VC++ 再頒布可能パッケージ (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe) をインストールしてください。
+
 
 ---
 
+
 ## 開発について
 
-本プラグインのコード作成にあたっては、生成AIを活用し開発しています。
+本プラグインのコード作成にあたっては、生成AIを活用した開発支援を受けています。
 
 ---
 
