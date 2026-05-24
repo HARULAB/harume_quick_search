@@ -195,10 +195,10 @@ fn win32_show_window(parent_hwnd_raw: isize) {
             let ah = (rect.bottom - rect.top) as f32;
             
             // 画面サイズに基づいた動的なサイズ計算
-            // 横幅：画面の1/3（最小500, 最大1000）
-            // 縦幅：画面の1/2（最小400, 最大800）
-            let target_w = (aw * 0.33).clamp(500.0 * scale, 1000.0 * scale);
-            let target_h = (ah * 0.50).clamp(400.0 * scale, 800.0 * scale);
+            // 横幅：画面の 2/4 (50%)（最小600, 最大1200）
+            // 縦幅：画面の 2/3 (66%)（最小500, 最大900）
+            let target_w = (aw * 0.50).clamp(600.0 * scale, 1200.0 * scale);
+            let target_h = (ah * 0.66).clamp(500.0 * scale, 900.0 * scale);
 
             let x = (rect.left as f32 + (aw - target_w) / 2.0) as i32;
             let y = (rect.top as f32 + (ah - target_h) / 2.0) as i32;
