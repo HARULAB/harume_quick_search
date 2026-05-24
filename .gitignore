@@ -1,0 +1,16 @@
+/target
+/build
+/docs
+handover_notes.md
+**/*.rs.bk
+build_*.txt
+check_*.txt
+err.txt
+err2.txt
+output.txt
+build2.txt
+.DS_Store
+*.pdb
+*.exe
+*.dll
+*.aux2

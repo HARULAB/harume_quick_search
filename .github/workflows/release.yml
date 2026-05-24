@@ -1,0 +1,30 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: cargo build --release
+      - name: Prepare distribution
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path dist
+          Move-Item target/release/harume_quick_search.dll dist/harume_quick_search.aux2
+          Copy-Item LICENSE, THIRD-PARTY-NOTICES, README.md -Destination dist/
+      - name: Zip distribution
+        shell: powershell
+        run: Compress-Archive -Path dist/* -DestinationPath harume_quick_search.zip
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: harume_quick_search.zip
