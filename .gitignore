@@ -1,7 +1,9 @@
 /target
 /build
 /docs
+/manual_bundle
 handover_notes.md
+*.zip
 **/*.rs.bk
 build_*.txt
 check_*.txt
