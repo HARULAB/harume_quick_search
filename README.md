@@ -1,6 +1,7 @@
 # HARUME Quick Search
 
-AviUtl2 用のエフェクト検索プラグインです。  
+AviUtl2 用のエフェクト検索プラグインです。 
+AEで言うとFX Consoleと似た機能を持ちます
 
 ![Preview](preview.png)
 
