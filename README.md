@@ -9,7 +9,7 @@ After Effects のFX Consoleのように、素早く検索し追加できます�
 ![Rust](https://img.shields.io/badge/Rust-1.70%2B-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
----
+
 
 
 # 特徴
@@ -26,9 +26,9 @@ After Effects のFX Consoleのように、素早く検索し追加できます�
 * Esc：閉じる
 * 左右キー：タブ切り替え
 
----
+
   
----
+
 
 ## 使い方
 
@@ -36,7 +36,7 @@ After Effects のFX Consoleのように、素早く検索し追加できます�
 2. 検索ボックスにエフェクト名を入力します。
 3. クリックまたは **Enter** キーで、選択中のオブジェクトやタイムラインにエフェクトが追加されます。
 
----
+
 
 ## 動作確認環境
 
@@ -46,14 +46,13 @@ After Effects のFX Consoleのように、素早く検索し追加できます�
 ※ プラグインが読み込まれない場合、VC++ 再頒布可能パッケージ (x64) をインストールすると解決する可能性があります。
 
 
----
+
 
 
 ## 開発について
 
 本プラグインのコード作成にあたっては、生成AIを活用した開発支援を受けています。
 
----
 
 ## ライセンス
 
@@ -68,7 +67,7 @@ MIT License (c) 2026 HARULAB
 * [windows-rs](https://github.com/microsoft/windows-rs)
 * [serde](https://github.com/serde-rs/serde)
 
----
+
 
 ## 免責事項
 
