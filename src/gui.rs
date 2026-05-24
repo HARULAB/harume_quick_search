@@ -333,6 +333,7 @@ struct HarumeApp {
     pending_save: bool,
     dirty_filter: bool,
     focus_search: bool,
+    is_composing: bool,
 }
 
 impl HarumeApp {
@@ -355,6 +356,7 @@ impl HarumeApp {
             pending_save: false,
             dirty_filter: true,
             focus_search: true,
+            is_composing: false,
         };
         app.rebuild_filter();
 
@@ -464,29 +466,53 @@ impl eframe::App for HarumeApp {
         let mut enter_pressed = false;
 
         ctx.input(|i| {
-            if i.key_pressed(egui::Key::Escape) { should_hide = true; }
-            if i.key_pressed(egui::Key::Enter) { enter_pressed = true; }
-            
-            // 左右矢印でカテゴリ切り替え
-            if i.key_pressed(egui::Key::ArrowRight) {
-                let current = CATEGORIES.iter().position(|&c| c == self.selected_category).unwrap_or(0);
-                self.selected_category = CATEGORIES[(current + 1) % CATEGORIES.len()];
-                self.dirty_filter = true;
-            }
-            if i.key_pressed(egui::Key::ArrowLeft) {
-                let current = CATEGORIES.iter().position(|&c| c == self.selected_category).unwrap_or(0);
-                self.selected_category = CATEGORIES[(current + CATEGORIES.len() - 1) % CATEGORIES.len()];
-                self.dirty_filter = true;
+            let mut ime_commit_this_frame = false;
+            // IME 状態の更新
+            for event in &i.events {
+                if let egui::Event::Ime(ime_event) = event {
+                    match ime_event {
+                        egui::ImeEvent::Preedit(text) => self.is_composing = !text.is_empty(),
+                        egui::ImeEvent::Commit(_) => {
+                            self.is_composing = false;
+                            ime_commit_this_frame = true;
+                        }
+                        egui::ImeEvent::Disabled => self.is_composing = false,
+                        _ => {}
+                    }
+                }
             }
 
-            let old_cursor = self.keyboard_cursor;
-            if i.key_pressed(egui::Key::ArrowDown) {
-                self.keyboard_cursor = Some(self.keyboard_cursor.map_or(0, |c| (c + 1).min(self.filtered_indices.len().saturating_sub(1))));
+            if i.key_pressed(egui::Key::Escape) { should_hide = true; }
+            
+            // IME 入力中は確定(Enter)や移動(矢印)を無視する
+            if !self.is_composing {
+                // Enterが押されたが、それがIMEの確定(Commit)と同じフレームなら、
+                // それは「文字の確定」のためのEnterなので無視する。
+                if i.key_pressed(egui::Key::Enter) && !ime_commit_this_frame { 
+                    enter_pressed = true; 
+                }
+                
+                // 左右矢印でカテゴリ切り替え
+                if i.key_pressed(egui::Key::ArrowRight) {
+                    let current = CATEGORIES.iter().position(|&c| c == self.selected_category).unwrap_or(0);
+                    self.selected_category = CATEGORIES[(current + 1) % CATEGORIES.len()];
+                    self.dirty_filter = true;
+                }
+                if i.key_pressed(egui::Key::ArrowLeft) {
+                    let current = CATEGORIES.iter().position(|&c| c == self.selected_category).unwrap_or(0);
+                    self.selected_category = CATEGORIES[(current + CATEGORIES.len() - 1) % CATEGORIES.len()];
+                    self.dirty_filter = true;
+                }
+
+                let old_cursor = self.keyboard_cursor;
+                if i.key_pressed(egui::Key::ArrowDown) {
+                    self.keyboard_cursor = Some(self.keyboard_cursor.map_or(0, |c| (c + 1).min(self.filtered_indices.len().saturating_sub(1))));
+                }
+                if i.key_pressed(egui::Key::ArrowUp) {
+                    self.keyboard_cursor = Some(self.keyboard_cursor.map_or(0, |c| c.saturating_sub(1)));
+                }
+                if self.keyboard_cursor != old_cursor { self.scroll_to_cursor = true; }
             }
-            if i.key_pressed(egui::Key::ArrowUp) {
-                self.keyboard_cursor = Some(self.keyboard_cursor.map_or(0, |c| c.saturating_sub(1)));
-            }
-            if self.keyboard_cursor != old_cursor { self.scroll_to_cursor = true; }
         });
 
         if enter_pressed {
@@ -532,7 +558,11 @@ impl eframe::App for HarumeApp {
                         let mut text_typed = false;
                         ctx.input(|i| {
                             for event in &i.events {
-                                if let egui::Event::Text(_) = event { text_typed = true; }
+                                match event {
+                                    egui::Event::Text(_) => text_typed = true,
+                                    egui::Event::Ime(egui::ImeEvent::Preedit(_)) => text_typed = true,
+                                    _ => {}
+                                }
                             }
                         });
                         if text_typed { res.request_focus(); }
