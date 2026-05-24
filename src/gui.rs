@@ -183,7 +183,6 @@ fn win32_show_window(parent_hwnd_raw: isize) {
         if hwnd_raw == 0 { return; }
         let hwnd = HWND(hwnd_raw as *mut _);
 
-        let cfg = load_config();
         let mut parent = HWND(parent_hwnd_raw as *mut _);
         if parent.0.is_null() { parent = GetDesktopWindow(); }
 
@@ -194,10 +193,17 @@ fn win32_show_window(parent_hwnd_raw: isize) {
         if GetWindowRect(parent, &mut rect).is_ok() {
             let aw = (rect.right - rect.left) as f32;
             let ah = (rect.bottom - rect.top) as f32;
-            let x = (rect.left as f32 + (aw - cfg.width * scale) / 2.0) as i32;
-            let y = (rect.top as f32 + (ah - cfg.height * scale) / 2.0) as i32;
-            let w = (cfg.width * scale) as i32;
-            let h = (cfg.height * scale) as i32;
+            
+            // 画面サイズに基づいた動的なサイズ計算
+            // 横幅：画面の1/3（最小500, 最大1000）
+            // 縦幅：画面の1/2（最小400, 最大800）
+            let target_w = (aw * 0.33).clamp(500.0 * scale, 1000.0 * scale);
+            let target_h = (ah * 0.50).clamp(400.0 * scale, 800.0 * scale);
+
+            let x = (rect.left as f32 + (aw - target_w) / 2.0) as i32;
+            let y = (rect.top as f32 + (ah - target_h) / 2.0) as i32;
+            let w = target_w as i32;
+            let h = target_h as i32;
             let _ = SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_SHOWWINDOW);
         } else {
             let _ = ShowWindow(hwnd, SW_SHOW);
