@@ -57,11 +57,11 @@ After Effects のFX Consoleのように、素早く検索し追加できます�
 
 ##ライセンス
 
-## 本プロジェクト
+# 本プロジェクト
 MIT License (c) 2026 HARULAB  
 詳細は `LICENSE` ファイルをご覧ください。
 
-## クレジット
+# クレジット
 本プロジェクトでは以下のライブラリを利用しています。
 * [AviUtl2 SDK (aviutl2-rs)](https://github.com/sevenc-nanashi/aviutl2-rs)
 * [egui / eframe](https://github.com/emilk/egui)
