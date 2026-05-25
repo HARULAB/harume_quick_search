@@ -58,7 +58,7 @@ After Effects のFX Consoleのように、素早く検索し追加できます�
 ##ライセンス
 
 # 本プロジェクト
-MIT License (c) 2026 HARULAB  
+MIT License (c) 2026 HARUME  
 詳細は `LICENSE` ファイルをご覧ください。
 
 # クレジット
