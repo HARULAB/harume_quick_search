@@ -30,7 +30,7 @@ After Effects のFX Consoleのように、素早く検索し追加できます�
   
 
 
-## 使い方
+# 使い方
 
 1. 編集メニューから **`HARUME Quick Search \ Open Panel`** を選択します（ショートカットキーへの割り当てを推奨。おすすめは `E` キー）。
 2. 検索ボックスにエフェクト名を入力します。
@@ -38,7 +38,7 @@ After Effects のFX Consoleのように、素早く検索し追加できます�
 
 
 
-## 動作確認環境
+# 動作確認環境
 
 * AviUtl2 beta47
 
@@ -50,18 +50,18 @@ After Effects のFX Consoleのように、素早く検索し追加できます�
 
 
 
-## 開発について
+# 開発について
 
 本プラグインのコード作成にあたっては、生成AIを活用した開発支援を受けています。
 
 
-## ライセンス
+##ライセンス
 
-### 本プロジェクト
+## 本プロジェクト
 MIT License (c) 2026 HARULAB  
 詳細は `LICENSE` ファイルをご覧ください。
 
-### クレジット
+## クレジット
 本プロジェクトでは以下のライブラリを利用しています。
 * [AviUtl2 SDK (aviutl2-rs)](https://github.com/sevenc-nanashi/aviutl2-rs)
 * [egui / eframe](https://github.com/emilk/egui)
@@ -70,6 +70,6 @@ MIT License (c) 2026 HARULAB
 
 
 
-## 免責事項
+# 免責事項
 
 本プラグインの使用によって生じたすべての障害・損害について、制作者は一切の責任を負いません。各自の責任においてご使用ください。
