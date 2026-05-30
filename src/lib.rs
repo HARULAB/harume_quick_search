@@ -3,6 +3,10 @@ use aviutl2::generic::{GenericPlugin, GenericPluginTable, GlobalEditHandle, Host
 
 static GLOBAL_EDIT_HANDLE: GlobalEditHandle = GlobalEditHandle::new();
 
+mod config;
+mod gui;
+mod i18n;
+
 #[aviutl2::plugin(GenericPlugin)]
 pub struct QuickSearch {}
 
@@ -39,7 +43,4 @@ impl GenericPlugin for QuickSearch {
     }
 }
 
-mod gui;
-
 aviutl2::register_generic_plugin!(QuickSearch);
-
