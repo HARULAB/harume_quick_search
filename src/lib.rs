@@ -4,28 +4,32 @@ use aviutl2::generic::{GenericPlugin, GenericPluginTable, GlobalEditHandle, Host
 static GLOBAL_EDIT_HANDLE: GlobalEditHandle = GlobalEditHandle::new();
 
 #[aviutl2::plugin(GenericPlugin)]
-pub struct HarumeEffectEditor {}
+pub struct QuickSearch {}
 
-unsafe impl Send for HarumeEffectEditor {}
-unsafe impl Sync for HarumeEffectEditor {}
+unsafe impl Send for QuickSearch {}
+unsafe impl Sync for QuickSearch {}
 
-impl GenericPlugin for HarumeEffectEditor {
+impl GenericPlugin for QuickSearch {
     fn new(_info: AviUtl2Info) -> AnyResult<Self> {
         Ok(Self {})
     }
 
     fn plugin_info(&self) -> GenericPluginTable {
         GenericPluginTable {
-            name: "HARUME Quick Search".into(),
-            information: "Add/read/edit object effects with a modern native UI (egui)".into(),
+            name: "Quick Search".into(),
+            information: "Quickly search and add AviUtl2 effects with a native UI (egui)".into(),
         }
     }
 
     fn register(&mut self, registry: &mut HostAppHandle) {
         GLOBAL_EDIT_HANDLE.init(registry.create_edit_handle());
 
-        registry.register_edit_menu("HARUME Quick Search\\Open Panel", || {
+        registry.register_edit_menu("Quick Search\\Open Panel", || {
             gui::register_and_show();
+        });
+
+        registry.register_edit_menu("Quick Search\\Settings", || {
+            gui::register_and_show_settings();
         });
 
         if std::env::var("HARUME_EE_DEBUG_AUTOOPEN").ok().as_deref() == Some("1") {
@@ -37,5 +41,5 @@ impl GenericPlugin for HarumeEffectEditor {
 
 mod gui;
 
-aviutl2::register_generic_plugin!(HarumeEffectEditor);
+aviutl2::register_generic_plugin!(QuickSearch);
 

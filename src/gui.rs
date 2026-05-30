@@ -11,7 +11,9 @@ use crate::GLOBAL_EDIT_HANDLE;
 // ── Static state ──────────────────────────────────────────────────────────────
 
 static THREAD_STARTED: AtomicBool = AtomicBool::new(false);
+static SETTINGS_THREAD_STARTED: AtomicBool = AtomicBool::new(false);
 static SELF_HWND: AtomicIsize = AtomicIsize::new(0);
+static SETTINGS_HWND: AtomicIsize = AtomicIsize::new(0);
 static WANTS_FOCUS: AtomicBool = AtomicBool::new(false);
 static WANTS_REFRESH: AtomicBool = AtomicBool::new(false);
 
@@ -35,12 +37,9 @@ impl Default for AppConfig {
 }
 
 fn get_config_path() -> std::path::PathBuf {
-    let mut p = std::env::var("LOCALAPPDATA")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| std::env::temp_dir());
-    p.push("harume_effect_editor_native");
+    let mut p = std::path::PathBuf::from(r"C:\ProgramData\aviutl2\Plugin");
     let _ = std::fs::create_dir_all(&p);
-    p.push("config.json");
+    p.push("quick_search_settings.json");
     p
 }
 
@@ -236,7 +235,7 @@ pub fn register_and_show() {
         let cfg = load_config();
         let mut viewport = egui::ViewportBuilder::default()
             .with_inner_size([cfg.width, cfg.height])
-            .with_title("HARUME Effect Editor")
+            .with_title("Quick Search")
             .with_always_on_top()
             .with_decorations(false)
             .with_transparent(true)
@@ -270,7 +269,7 @@ pub fn register_and_show() {
         };
 
         let _ = eframe::run_native(
-            "harume_effect_editor_native",
+            "harume_quick_search",
             options,
             Box::new(|cc| {
                 setup_japanese_fonts(&cc.egui_ctx);
@@ -281,6 +280,55 @@ pub fn register_and_show() {
 
         THREAD_STARTED.store(false, Ordering::SeqCst);
         SELF_HWND.store(0, Ordering::SeqCst);
+    });
+}
+
+pub fn register_and_show_settings() {
+    if SETTINGS_THREAD_STARTED.load(Ordering::SeqCst) {
+        unsafe {
+            use windows::Win32::Foundation::HWND;
+            use windows::Win32::UI::WindowsAndMessaging::{SetForegroundWindow, ShowWindow, SW_SHOW};
+
+            let hwnd_raw = SETTINGS_HWND.load(Ordering::SeqCst);
+            if hwnd_raw != 0 {
+                let hwnd = HWND(hwnd_raw as *mut _);
+                let _ = ShowWindow(hwnd, SW_SHOW);
+                let _ = SetForegroundWindow(hwnd);
+            }
+        }
+        return;
+    }
+
+    SETTINGS_THREAD_STARTED.store(true, Ordering::SeqCst);
+
+    std::thread::spawn(move || {
+        let viewport = egui::ViewportBuilder::default()
+            .with_inner_size([420.0, 260.0])
+            .with_title("Quick Search Settings")
+            .with_always_on_top()
+            .with_resizable(false);
+
+        let options = eframe::NativeOptions {
+            viewport,
+            event_loop_builder: Some(Box::new(|builder| {
+                use winit::platform::windows::EventLoopBuilderExtWindows;
+                builder.with_any_thread(true);
+            })),
+            ..Default::default()
+        };
+
+        let _ = eframe::run_native(
+            "quick_search_settings",
+            options,
+            Box::new(|cc| {
+                setup_japanese_fonts(&cc.egui_ctx);
+                setup_custom_style(&cc.egui_ctx);
+                Ok(Box::new(SettingsApp::new()))
+            }),
+        );
+
+        SETTINGS_THREAD_STARTED.store(false, Ordering::SeqCst);
+        SETTINGS_HWND.store(0, Ordering::SeqCst);
     });
 }
 
@@ -327,6 +375,79 @@ fn setup_custom_style(ctx: &egui::Context) {
 
 // ── App struct ────────────────────────────────────────────────────────────────
 
+struct SettingsApp {
+    config: AppConfig,
+    status: String,
+}
+
+impl SettingsApp {
+    fn new() -> Self {
+        Self {
+            config: load_config(),
+            status: String::new(),
+        }
+    }
+
+    fn reset_use_counts(&mut self) {
+        self.config.use_counts.clear();
+        save_config(&self.config);
+        self.status = "使用回数をリセットしました".to_string();
+    }
+
+    fn reset_window_size(&mut self) {
+        self.config.width = AppConfig::default().width;
+        self.config.height = AppConfig::default().height;
+        save_config(&self.config);
+        self.status = "ウィンドウサイズを初期化しました".to_string();
+    }
+}
+
+impl eframe::App for SettingsApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if SETTINGS_HWND.load(Ordering::SeqCst) == 0 {
+            unsafe {
+                use windows::Win32::UI::WindowsAndMessaging::*;
+                use windows::core::PCWSTR;
+                let title: Vec<u16> = "Quick Search Settings\0".encode_utf16().collect();
+                if let Ok(hwnd) = FindWindowW(PCWSTR::null(), PCWSTR(title.as_ptr())) {
+                    if !hwnd.0.is_null() {
+                        SETTINGS_HWND.store(hwnd.0 as isize, Ordering::SeqCst);
+                    }
+                }
+            }
+        }
+
+        egui::CentralPanel::default()
+            .frame(egui::Frame::none().inner_margin(16.0))
+            .show(ctx, |ui| {
+                ui.heading("Quick Search Settings");
+                ui.add_space(12.0);
+
+                ui.label(format!("設定ファイル: {}", get_config_path().display()));
+                ui.add_space(12.0);
+
+                if ui.button("使用回数をリセット").clicked() {
+                    self.reset_use_counts();
+                }
+
+                if ui.button("ウィンドウサイズを初期化").clicked() {
+                    self.reset_window_size();
+                }
+
+                ui.add_space(10.0);
+                if !self.status.is_empty() {
+                    ui.label(&self.status);
+                }
+
+                ui.with_layout(egui::Layout::bottom_up(egui::Align::RIGHT), |ui| {
+                    if ui.button("閉じる").clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                });
+            });
+    }
+}
+
 struct HarumeApp {
     search_query: String,
     selected_category: EffectCategory,
@@ -369,7 +490,7 @@ impl HarumeApp {
         unsafe {
             use windows::Win32::UI::WindowsAndMessaging::*;
             use windows::core::PCWSTR;
-            let title: Vec<u16> = "HARUME Effect Editor\0".encode_utf16().collect();
+            let title: Vec<u16> = "Quick Search\0".encode_utf16().collect();
             if let Ok(hwnd) = FindWindowW(PCWSTR::null(), PCWSTR(title.as_ptr())) {
                 if !hwnd.0.is_null() {
                     SELF_HWND.store(hwnd.0 as isize, Ordering::SeqCst);
@@ -450,7 +571,7 @@ impl eframe::App for HarumeApp {
             unsafe {
                 use windows::Win32::UI::WindowsAndMessaging::*;
                 use windows::core::PCWSTR;
-                let title: Vec<u16> = "HARUME Effect Editor\0".encode_utf16().collect();
+                let title: Vec<u16> = "Quick Search\0".encode_utf16().collect();
                 if let Ok(hwnd) = FindWindowW(PCWSTR::null(), PCWSTR(title.as_ptr())) {
                     if !hwnd.0.is_null() {
                         SELF_HWND.store(hwnd.0 as isize, Ordering::SeqCst);

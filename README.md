@@ -1,4 +1,4 @@
-# HARUME Quick Search
+# Quick Search
 
 AviUtl2 用のエフェクト検索プラグインです。  
 After Effects のFX Consoleのように、素早く検索し追加できます。
@@ -32,7 +32,7 @@ After Effects のFX Consoleのように、素早く検索し追加できます�
 
 # 使い方
 
-1. 編集メニューから **`HARUME Quick Search \ Open Panel`** を選択します（ショートカットキーへの割り当てを推奨。おすすめは `E` キー）。
+1. 編集メニューから **`Quick Search \ Open Panel`** を選択します（ショートカットキーへの割り当てを推奨。おすすめは `E` キー）。
 2. 検索ボックスにエフェクト名を入力します。
 3. クリックまたは **Enter** キーで、選択中のオブジェクトやタイムラインにエフェクトが追加されます。
 
