@@ -76,7 +76,74 @@ impl EffectCategory {
 pub struct EffectEntry {
     pub name: String,
     pub name_lower: String,
+    /// カタカナをひらがなに畳んだ検索用の名前。
+    /// クエリ側だけを変換していると、ひらがな入力でカタカナ名に当たらないため
+    /// 対象名も正規化しておく（1回だけ計算して使い回す）。
+    pub name_kana: String,
     pub category: EffectCategory,
+}
+
+impl EffectEntry {
+    fn new(name: String, category: EffectCategory) -> Self {
+        let name_lower = name.to_lowercase();
+        let name_kana = katakana_to_hiragana(&name_lower);
+        Self {
+            name,
+            name_lower,
+            name_kana,
+            category,
+        }
+    }
+}
+
+/// 検索マッチの品質。数値が小さいほど上位に出す。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum MatchQuality {
+    /// 名前がクエリで始まる
+    Prefix,
+    /// 名前のどこかにクエリを含む
+    Substring,
+    /// 文字が順番に現れる（あいまい一致）
+    Subsequence,
+}
+
+/// `needle` の文字が `haystack` に順番に現れるか（連続していなくてよい）。
+fn is_subsequence(haystack: &str, needle: &str) -> bool {
+    let mut chars = haystack.chars();
+    needle
+        .chars()
+        .all(|nc| chars.any(|hc| hc == nc))
+}
+
+/// 1語分のマッチ判定。ローマ字/ひらがな/カタカナの各表記で当てる。
+fn match_word(entry: &EffectEntry, raw: &str, hira: &str) -> Option<MatchQuality> {
+    let targets = [entry.name_lower.as_str(), entry.name_kana.as_str()];
+    let needles = [raw, hira];
+
+    let mut best: Option<MatchQuality> = None;
+    for t in targets {
+        for n in needles {
+            if n.is_empty() {
+                continue;
+            }
+            let q = if t.starts_with(n) {
+                Some(MatchQuality::Prefix)
+            } else if t.contains(n) {
+                Some(MatchQuality::Substring)
+            } else if is_subsequence(t, n) {
+                Some(MatchQuality::Subsequence)
+            } else {
+                None
+            };
+            if let Some(q) = q {
+                best = Some(best.map_or(q, |b| b.min(q)));
+                if best == Some(MatchQuality::Prefix) {
+                    return best;
+                }
+            }
+        }
+    }
+    best
 }
 
 static ALL_EFFECTS: Mutex<Vec<EffectEntry>> = Mutex::new(Vec::new());
@@ -86,38 +153,25 @@ pub fn fetch_effects() {
         lock.clear();
         if GLOBAL_EDIT_HANDLE.is_ready() {
             for e in GLOBAL_EDIT_HANDLE.get_effects() {
-                let n = &e.name;
-
-                let is_scene = n.contains("シーン") || n.contains("scene") || n.contains("Scene");
-
-                let is_object = e.effect_type == aviutl2::generic::EffectType::Input
-                    || matches!(
-                        e.effect_type,
-                        aviutl2::generic::EffectType::Other(4)
-                            | aviutl2::generic::EffectType::Other(5)
-                    )
-                    || n.contains("@FIGURE")
-                    || n.contains("@LOAD")
-                    || n.contains("一時的に保存")
-                    || n.contains("保存画像の読込")
-                    || n == "テキスト"
-                    || n == "図形";
-
-                let cat = if is_scene {
-                    EffectCategory::Scene
-                } else if is_object {
-                    EffectCategory::Object
-                } else {
-                    EffectCategory::Filter
-                };
-
-                lock.push(EffectEntry {
-                    name: e.name.clone(),
-                    name_lower: e.name.to_lowercase(),
-                    category: cat,
-                });
+                lock.push(EffectEntry::new(e.name.clone(), categorize(&e)));
             }
         }
+    }
+}
+
+/// エフェクトのカテゴリを SDK の種別から決める。
+///
+/// 以前は名前の部分一致（`contains("シーン")`, `"@FIGURE"`, `"一時的に保存"` …）で
+/// 判定していたため、名前に「シーン」を含むだけの別エフェクトが Scene に誤分類されていた。
+fn categorize(e: &aviutl2::generic::Effect) -> EffectCategory {
+    use aviutl2::generic::EffectType;
+    match e.effect_type {
+        // シーンチェンジ
+        EffectType::SceneChange => EffectCategory::Scene,
+        // メディア入力・オブジェクト制御・メディア出力は
+        // 「フィルタとして足す」のではなく単体のオブジェクトとして扱う
+        EffectType::Input | EffectType::Control | EffectType::Output => EffectCategory::Object,
+        EffectType::Filter => EffectCategory::Filter,
     }
 }
 
@@ -190,9 +244,19 @@ pub fn register_and_show() {
     WANTS_FOCUS.store(true, Ordering::SeqCst);
     WANTS_REFRESH.store(true, Ordering::SeqCst);
 
-    if THREAD_STARTED.load(Ordering::SeqCst) {
+    // ウィンドウが実在するか（= SELF_HWND が設定済みか）で判断する。
+    // THREAD_STARTED で判断すると、スレッド起動直後で SELF_HWND がまだ 0 の間に
+    // メニューを再度叩いた場合に win32_show_window が何もせず返り、パネルが開かない。
+    if SELF_HWND.load(Ordering::SeqCst) != 0 {
         fetch_effects();
         win32_show_window(parent_hwnd_raw);
+        return;
+    }
+
+    // スレッドは動いているがウィンドウがまだ無い（起動中）。
+    // WANTS_FOCUS を立てたので egui 側が表示を引き受ける。二重起動はしない。
+    if THREAD_STARTED.load(Ordering::SeqCst) {
+        fetch_effects();
         return;
     }
 
@@ -378,76 +442,61 @@ impl HarumeApp {
     fn rebuild_filter(&mut self) {
         let query = self.search_query.to_lowercase();
 
-        let hira_query = romaji_to_hiragana(&query);
-        let kata_query = hiragana_to_katakana(&hira_query);
-
-        let words: Vec<String> = query.split_whitespace().map(|w| w.to_string()).collect();
-        let hira_words: Vec<String> = hira_query
+        // 語ごとに (原文, ひらがな) を用意する。対象名もひらがなに畳んであるので
+        // カタカナ版を別に持つ必要はない。
+        let words: Vec<(String, String)> = query
             .split_whitespace()
-            .map(|w| w.to_string())
-            .collect();
-        let kata_words: Vec<String> = kata_query
-            .split_whitespace()
-            .map(|w| w.to_string())
+            .map(|w| (w.to_string(), katakana_to_hiragana(&romaji_to_hiragana(w))))
             .collect();
 
-        let mut indices: Vec<usize> = self
-            .effects
-            .iter()
-            .enumerate()
-            .filter(|(_, e)| {
-                let cat_match = self.selected_category == EffectCategory::All
-                    || e.category == self.selected_category;
-                if !cat_match {
-                    return false;
-                }
+        // (ソートキー, インデックス) を作る。
+        // ソート順: マッチ品質 -> 使用頻度(降順) -> 名前の短さ -> カテゴリ -> 名前
+        // 使用頻度は比較関数の中で毎回 HashMap を引かず、ここで1回だけ引く。
+        let indices: Vec<usize> = {
+        let mut scored: Vec<(MatchQuality, std::cmp::Reverse<u32>, usize, &'static str, &str, usize)> =
+            Vec::new();
 
-                if words.is_empty() {
-                    return true;
-                }
+        for (i, e) in self.effects.iter().enumerate() {
+            if self.selected_category != EffectCategory::All && e.category != self.selected_category
+            {
+                continue;
+            }
 
-                for i in 0..words.len() {
-                    let w = &words[i];
-                    let hw = &hira_words[i];
-                    let kw = &kata_words[i];
-
-                    let matched = e.name_lower.contains(w)
-                        || e.name_lower.contains(hw)
-                        || e.name_lower.contains(kw);
-
-                    if !matched {
-                        return false;
+            // 全語がマッチする必要がある。品質は最も悪い語に合わせる（AND検索）
+            let quality = if words.is_empty() {
+                MatchQuality::Prefix
+            } else {
+                let mut worst = MatchQuality::Prefix;
+                let mut all_matched = true;
+                for (raw, hira) in &words {
+                    match match_word(e, raw, hira) {
+                        Some(q) => worst = worst.max(q),
+                        None => {
+                            all_matched = false;
+                            break;
+                        }
                     }
                 }
-                true
-            })
-            .map(|(i, _)| i)
-            .collect();
+                if !all_matched {
+                    continue;
+                }
+                worst
+            };
 
-        // 使用頻度 -> カテゴリ -> 名前の順でソート
-        indices.sort_by(|&a, &b| {
-            let ca = self
-                .config
-                .use_counts
-                .get(&self.effects[a].name)
-                .copied()
-                .unwrap_or(0);
-            let cb = self
-                .config
-                .use_counts
-                .get(&self.effects[b].name)
-                .copied()
-                .unwrap_or(0);
+            let count = self.config.use_counts.get(&e.name).copied().unwrap_or(0);
+            scored.push((
+                quality,
+                std::cmp::Reverse(count),
+                e.name.chars().count(),
+                e.category.badge_text(),
+                e.name.as_str(),
+                i,
+            ));
+        }
 
-            cb.cmp(&ca)
-                .then_with(|| {
-                    self.effects[a]
-                        .category
-                        .badge_text()
-                        .cmp(self.effects[b].category.badge_text())
-                })
-                .then_with(|| self.effects[a].name.cmp(&self.effects[b].name))
-        });
+        scored.sort();
+        scored.into_iter().map(|t| t.5).collect()
+        };
 
         self.filtered_indices = indices;
         self.keyboard_cursor = if self.filtered_indices.is_empty() {
@@ -462,8 +511,11 @@ impl HarumeApp {
     fn execute_add(&mut self, name: String, category: EffectCategory) {
         request_add_effect(&name, category);
         *self.config.use_counts.entry(name).or_insert(0) += 1;
+        // 設定全体（ウィンドウサイズ含む）を書き出すので保留分もここで消化される
         save_config(&self.config);
         self.pending_save = false;
+        self.last_save = Instant::now();
+        self.dirty_filter = true; // 使用頻度が変わったので並び順を作り直す
     }
 
     fn hide(&mut self) {
@@ -947,7 +999,7 @@ fn add_effect_logic(
 
     if is_filter_type {
         if let Some(target) = find_target_object(edit_section) {
-            if add_filter_to_object(edit_section, &target, effect_name) {
+            if add_filter_to_object(edit_section, target, effect_name) {
                 return;
             }
         }
@@ -969,63 +1021,27 @@ fn find_target_object(
     None
 }
 
+/// 選択オブジェクトにフィルタ効果を追加する。
+///
+/// AviUtl2 2.1.x の `create_effect()` を使う。以前はエイリアス文字列に
+/// `[Object.N] effect.name=` を追記して「オブジェクトを削除→作り直す」実装だったが、
+/// ハンドルが無効化される・Undoが2手になる・失敗時にオブジェクトを失う危険があった。
 fn add_filter_to_object(
     edit_section: &mut aviutl2::generic::EditSection,
-    target: &aviutl2::generic::ObjectHandle,
+    target: aviutl2::generic::ObjectHandle,
     effect_name: &str,
 ) -> bool {
-    if let Ok(alias) = edit_section.get_object_alias(target) {
-        let mut max_idx = -1i32;
-        for line in alias.lines() {
-            let trimmed = line.trim();
-            if trimmed.starts_with("[Object.") {
-                if let Some(n) = trimmed
-                    .strip_prefix("[Object.")
-                    .and_then(|s| s.strip_suffix(']'))
-                {
-                    if let Ok(i) = n.parse::<i32>() {
-                        if i > max_idx {
-                            max_idx = i;
-                        }
-                    }
-                }
-            }
-        }
-
-        let new_alias = format!(
-            "{}\n[Object.{}]\neffect.name={}\n",
-            alias.trim_end(),
-            max_idx + 1,
-            effect_name
-        );
-
-        if let Ok(lf) = edit_section.get_object_layer_frame(target) {
-            let _ = edit_section.delete_object(target);
-            match edit_section.create_object_from_alias(
-                &new_alias,
-                lf.layer as usize,
-                lf.start as usize,
-                (lf.end - lf.start) as usize,
-            ) {
-                Ok(no) => {
-                    let _ = edit_section.focus_object(&no);
-                    return true;
-                }
-                Err(_) => {
-                    if let Ok(ro) = edit_section.create_object_from_alias(
-                        &alias,
-                        lf.layer as usize,
-                        lf.start as usize,
-                        (lf.end - lf.start) as usize,
-                    ) {
-                        let _ = edit_section.focus_object(&ro);
-                    }
-                    return false;
-                }
-            }
+    match edit_section.create_effect(target, effect_name) {
+        Ok(_) => true,
+        Err(e) => {
+            aviutl2::lprintln!(
+                "QuickSearch: create_effect failed for '{}': {:?}",
+                effect_name,
+                e
+            );
+            false
         }
     }
-    false
 }
 
 fn create_new_object(edit_section: &mut aviutl2::generic::EditSection, effect_name: &str) {
@@ -1035,7 +1051,7 @@ fn create_new_object(edit_section: &mut aviutl2::generic::EditSection, effect_na
     for _ in 0..50 {
         match edit_section.create_object(effect_name, layer, frame, Some(180)) {
             Ok(o) => {
-                let _ = edit_section.focus_object(&o);
+                let _ = edit_section.set_focus_object(Some(o));
                 return;
             }
             Err(_) => {
@@ -1171,13 +1187,15 @@ fn romaji_to_hiragana(input: &str) -> String {
     s
 }
 
-fn hiragana_to_katakana(input: &str) -> String {
+/// カタカナをひらがなに畳む。検索の正規化に使う（対象名・クエリの双方に適用）。
+fn katakana_to_hiragana(input: &str) -> String {
     input
         .chars()
         .map(|c| {
             let code = c as u32;
-            if (0x3041..=0x3096).contains(&code) {
-                std::char::from_u32(code + 0x60).unwrap_or(c)
+            // ァ(0x30A1)〜ヶ(0x30F6) を ぁ〜ゖ へ
+            if (0x30A1..=0x30F6).contains(&code) {
+                std::char::from_u32(code - 0x60).unwrap_or(c)
             } else {
                 c
             }

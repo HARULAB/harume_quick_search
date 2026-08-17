@@ -10,8 +10,8 @@ mod i18n;
 #[aviutl2::plugin(GenericPlugin)]
 pub struct QuickSearch {}
 
-unsafe impl Send for QuickSearch {}
-unsafe impl Sync for QuickSearch {}
+// 状態を持たない（HWNDはgui側のstaticが保持する）ため
+// unsafe impl Send/Sync は不要。
 
 impl GenericPlugin for QuickSearch {
     fn new(_info: AviUtl2Info) -> AnyResult<Self> {
@@ -36,8 +36,8 @@ impl GenericPlugin for QuickSearch {
             gui::register_and_show_settings();
         });
 
-        if std::env::var("HARUME_EE_DEBUG_AUTOOPEN").ok().as_deref() == Some("1") {
-            aviutl2::lprintln!("HARUME_EE: debug auto-open enabled");
+        if std::env::var("QUICK_SEARCH_DEBUG_AUTOOPEN").ok().as_deref() == Some("1") {
+            aviutl2::lprintln!("QuickSearch: debug auto-open enabled");
             gui::register_and_show();
         }
     }
